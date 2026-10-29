@@ -445,6 +445,7 @@ static bool        g_cfgUnderLayers = true;
 static float       g_cfgWindowScale   = 0.5f;    // room multiplier on window size
 static float       g_cfgDarkLevel     = 0.15f;   // room light level with the lights off
 static float       g_lightTarget      = 1.0f;    // hypr3d.lights(): where the level fades to
+static std::unordered_map<std::string, float> g_powerTarget; // hypr3d.power(): group -> 0/1
 static float       g_cfgSpawnDistance = 5.0f;    // units in front of the camera
 static float       g_cfgWindowDepth   = 0.05f;   // slab thickness, 0 = flat quads
 
@@ -491,6 +492,7 @@ struct SSceneObjectCfg {
     bool        physics = false; // gravity + world collisions (dynamic only)
     bool        selfLit = false; // keeps glowing when the room lights go down
     float       darkLevel = -1.0f; // own lights-off level (< 0 = world.dark_level)
+    std::vector<std::string> power, powerMaterials; // hypr3d.power groups
     CMapModel::ECenter center = CMapModel::ECenter::Logical;
     Vec3        centerOffset{}; // extra pivot shift, local units
 };
@@ -3839,6 +3841,10 @@ static void update3D(float dt) {
         const float STEP = std::max(dt, 0.0f) * 2.5f; // full swing in ~0.4 s
         LV = LV < g_lightTarget ? std::min(g_lightTarget, LV + STEP)
                                 : std::max(g_lightTarget, LV - STEP);
+        for (const auto& [G, T] : g_powerTarget) {
+            float& P = CMapModel::s_power.try_emplace(G, 1.0f).first->second;
+            P = P < T ? std::min(T, P + STEP * 1.6f) : std::max(T, P - STEP * 1.6f);
+        }
     }
     // Release capture unconditionally when the view no longer owns input, so
     // a disappearing monitor or a closing transition can never strand the
@@ -3879,6 +3885,8 @@ static void update3D(float dt) {
         SPEC.flat          = OBJ.flat;
         SPEC.selfLit       = OBJ.selfLit;
         SPEC.darkLevel     = OBJ.darkLevel;
+        SPEC.power         = OBJ.power;
+        SPEC.powerMaterials = OBJ.powerMaterials;
         SPEC.center        = OBJ.center;
         SPEC.centerOffset  = OBJ.centerOffset;
         SPECS.push_back(SPEC);
@@ -6177,6 +6185,20 @@ static int luaLights(lua_State* L) {
     return 1;
 }
 
+// hypr3d.power(group, [on]): switch a power group (scene.<name>.power) on
+// or off -- its screens and lamps black out, its haze fades; no second
+// argument toggles. Returns the new state.
+static int luaPower(lua_State* L) {
+    const char* G = luaL_checkstring(L, 1);
+    auto& T = g_powerTarget.try_emplace(G, 1.0f).first->second;
+    T = lua_isboolean(L, 2) ? (lua_toboolean(L, 2) ? 1.0f : 0.0f) : (T > 0.5f ? 0.0f : 1.0f);
+    if (!g_active)
+        CMapModel::s_power[G] = T; // no frames to fade over
+    damageCurrentMonitor();
+    lua_pushboolean(L, T > 0.5f);
+    return 1;
+}
+
 static int luaFirstPersonBody(lua_State* L) {
     g_cfgFpBody = lua_isboolean(L, 1) ? lua_toboolean(L, 1) : !g_cfgFpBody;
     damageCurrentMonitor();
@@ -6331,6 +6353,41 @@ static int luaConfig(lua_State* L) {
         size_t LEN = 0;
         const char* STR = lua_tolstring(L, -1, &LEN);
         out.assign(STR, LEN);
+        lua_pop(L, 1);
+        return true;
+    };
+
+    // A string or a list of strings (nil keeps the default).
+    const auto SET_STRINGS = [&](int tidx, const char* key,
+                                 std::vector<std::string>& out) -> bool {
+        lua_getfield(L, tidx, key);
+        if (lua_isnil(L, -1)) {
+            lua_pop(L, 1);
+            return true;
+        }
+        out.clear();
+        if (lua_type(L, -1) == LUA_TSTRING) {
+            out.emplace_back(lua_tostring(L, -1));
+            lua_pop(L, 1);
+            return true;
+        }
+        if (!lua_istable(L, -1)) {
+            lua_pop(L, 1);
+            return false;
+        }
+        for (int i = 1;; ++i) {
+            lua_rawgeti(L, -1, i);
+            if (lua_isnil(L, -1)) {
+                lua_pop(L, 1);
+                break;
+            }
+            if (lua_type(L, -1) != LUA_TSTRING) {
+                lua_pop(L, 2);
+                return false;
+            }
+            out.emplace_back(lua_tostring(L, -1));
+            lua_pop(L, 1);
+        }
         lua_pop(L, 1);
         return true;
     };
@@ -6847,6 +6904,14 @@ static int luaConfig(lua_State* L) {
                 lua_pop(L, 1);
                 return luaL_error(L, "hypr3d.config: scene.<name>.dark_level must be a number");
             }
+            if (!SET_STRINGS(OIDX, "power", OBJ.power)) {
+                lua_pop(L, 1);
+                return luaL_error(L, "hypr3d.config: scene.<name>.power must be a string or a list of strings");
+            }
+            if (!SET_STRINGS(OIDX, "power_materials", OBJ.powerMaterials)) {
+                lua_pop(L, 1);
+                return luaL_error(L, "hypr3d.config: scene.<name>.power_materials must be a list of strings");
+            }
 
             // mesh = { ... }: the shared visual description -- overrides
             // the legacy flat keys when present.
@@ -7053,6 +7118,9 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
 
     if (!HyprlandAPI::addLuaFunction(PHANDLE, "hypr3d", "lights", luaLights))
         throw std::runtime_error("[hypr3d] failed to register Lua lights");
+
+    if (!HyprlandAPI::addLuaFunction(PHANDLE, "hypr3d", "power", luaPower))
+        throw std::runtime_error("[hypr3d] failed to register Lua power");
 
     if (!HyprlandAPI::addLuaFunction(PHANDLE, "hypr3d", "active", luaActive))
         throw std::runtime_error("[hypr3d] failed to register Lua active");

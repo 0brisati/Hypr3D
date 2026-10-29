@@ -1271,6 +1271,7 @@ void GLScene::setSceneObjects(const std::vector<SSceneSpec>& specs) {
         S.model->setFlat(S.spec.flat);
         S.model->setSelfLit(S.spec.selfLit);
         S.model->setDarkLevel(S.spec.darkLevel);
+        S.model->setPower(S.spec.power, S.spec.powerMaterials);
 
         if (CENTER_CHANGED)
             S.model->setCenter(S.spec.center, S.spec.centerOffset);

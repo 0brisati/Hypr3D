@@ -223,6 +223,7 @@ class GLScene {
         bool flat = false; // false = headlight half-lambert shading
         bool selfLit = false; // ignores the room light level
         float darkLevel = -1.0f; // own lights-off level, < 0 = the room's
+        std::vector<std::string> power, powerMaterials; // hypr3d.power groups
         CMapModel::ECenter center = CMapModel::ECenter::Logical;
         Vec3 centerOffset{};
     };

@@ -2,12 +2,14 @@
 
 #include "World/Camera.hpp"
 
+#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <memory>
 #include <stop_token>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 namespace H3D {
@@ -76,6 +78,23 @@ class CMapModel {
     void setDarkLevel(float d) {
         m_darkLevel = d;
     }
+    // Power groups (hypr3d.power): an off group blacks out the emissive
+    // output (screens, lamps) and fades the blended haze of this model's
+    // primitives -- all of them, or only those whose material is listed.
+    // Lit surfaces keep following the room light.
+    static inline std::unordered_map<std::string, float> s_power; // group -> 0..1
+    void setPower(std::vector<std::string> groups, std::vector<std::string> materials) {
+        m_powerGroups    = std::move(groups);
+        m_powerMaterials = std::move(materials);
+    }
+    float powerLevel() const {
+        float p = 1.0f;
+        for (const auto& G : m_powerGroups)
+            if (const auto IT = s_power.find(G); IT != s_power.end())
+                p = std::min(p, IT->second);
+        return p;
+    }
+
     float lightLevel() const {
         if (m_selfLit)
             return 1.0f;
@@ -180,6 +199,7 @@ class CMapModel {
         int          alphaMode = 0;
         float        alphaCutoff = 0.5f;
         Vec3         centroid{}; // node-space AABB center, for blend sorting
+        std::string  material;   // glTF material name (power_materials)
     };
 
     // The file's meshes and images, read and decoded without GL.
@@ -231,6 +251,8 @@ class CMapModel {
     int                     m_uLight = -1;
     bool                    m_selfLit = false;
     float                   m_darkLevel = -1.0f;
+    std::vector<std::string> m_powerGroups, m_powerMaterials;
+    int                     m_uPower = -1;
     int                     m_uAlphaMode = -1;
     int                     m_uAlphaCutoff = -1;
 
