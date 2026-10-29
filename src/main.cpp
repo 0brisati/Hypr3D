@@ -6959,14 +6959,12 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
         3000
     );
 
-    if (!HyprlandAPI::addDispatcherV2(PHANDLE, "hypr3d:toggle", dispatchToggle))
-        throw std::runtime_error("[hypr3d] failed to register toggle dispatcher");
-
-    if (!HyprlandAPI::addDispatcherV2(PHANDLE, "hypr3d:open", dispatchOpen))
-        throw std::runtime_error("[hypr3d] failed to register open dispatcher");
-
-    if (!HyprlandAPI::addDispatcherV2(PHANDLE, "hypr3d:close", dispatchClose))
-        throw std::runtime_error("[hypr3d] failed to register close dispatcher");
+    // Lua-config Hyprland (0.57+) keeps addDispatcherV2 for ABI only and makes
+    // it fail; the hl.plugin.hypr3d.* Lua functions below are the real entry
+    // points there, so the legacy dispatchers are best-effort.
+    HyprlandAPI::addDispatcherV2(PHANDLE, "hypr3d:toggle", dispatchToggle);
+    HyprlandAPI::addDispatcherV2(PHANDLE, "hypr3d:open", dispatchOpen);
+    HyprlandAPI::addDispatcherV2(PHANDLE, "hypr3d:close", dispatchClose);
 
     if (!HyprlandAPI::addLuaFunction(PHANDLE, "hypr3d", "toggle", luaToggle))
         throw std::runtime_error("[hypr3d] failed to register Lua toggle");
