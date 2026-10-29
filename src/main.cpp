@@ -455,6 +455,8 @@ static bool        g_playerFlying     = true;    // false = walk / jump / gravit
 static bool        g_playerCollision  = true;    // reserved: the capsule is
         // the movement system, so this only gates future per-object contact
 static bool        g_cfgWalkBob       = true;    // view-only walk bob (walking only)
+static bool        g_cfgFpBody        = false;   // draw the character in first person (headless)
+static float       g_cfgFpBodyBack    = 0.2f;    // first-person body: metres behind the eye
 static GLScene::SPlayerCfg g_playerCfg;          // the player character
 static float        g_playerAnimSpeed[4] = {1.f, 1.f, 1.f, 1.f};
 
@@ -3603,7 +3605,8 @@ static void enter3D() {
     // the same cross-session memory as the camera pose.
     g_viewMode = g_savedCamValid ? g_savedViewMode : 0;
     g_scene.camera().mirrorView = g_viewMode == 2;
-    g_scene.setPlayerVisible(g_viewMode != 0);
+    g_scene.setPlayerVisible(g_viewMode != 0 || g_cfgFpBody);
+    g_scene.setPlayerHeadless(g_viewMode == 0 && g_cfgFpBody);
     g_scene.setPlayerDebugCapsule(Vec3{}, false);
 
     g_keyboardMode = EKeyboardMode::Space;
@@ -3971,9 +3974,11 @@ static void update3D(float dt) {
 
             g_grounded = playerGrounded();
 
-            // The character renders in third person only; F3 adds the
-            // capsule outline.
-            g_scene.setPlayerVisible(g_viewMode != 0);
+            // The character renders in third person, and headless in first
+            // person with player.first_person_body; F3 adds the capsule
+            // outline.
+            g_scene.setPlayerVisible(g_viewMode != 0 || g_cfgFpBody);
+            g_scene.setPlayerHeadless(g_viewMode == 0 && g_cfgFpBody);
             g_scene.setPlayerDebugCapsule(
                 Vec3{PPOS.GetX(), PPOS.GetY(), PPOS.GetZ()}, g_debugHud);
 
@@ -4083,9 +4088,16 @@ static void update3D(float dt) {
         // top of the look inertia and reads as a staircase on fast turns.
         {
             const auto PPOS = g_bodyIf->GetPosition(g_playerBody);
+            // First-person body: the feet step back along the facing, so
+            // the eye sits just in front of the (hidden) face and looking
+            // down shows the chest and legs rather than their insides.
+            const Vec3 BACK = g_viewMode == 0 && g_cfgFpBody
+                ? CAM.flatForward() * (-g_cfgFpBodyBack)
+                : Vec3{};
             g_scene.setPlayerPose(
-                Vec3{PPOS.GetX(), PPOS.GetY() - Camera::kBodyHeight * 0.5f,
-                     PPOS.GetZ()},
+                Vec3{PPOS.GetX() + BACK.x,
+                     PPOS.GetY() - Camera::kBodyHeight * 0.5f,
+                     PPOS.GetZ() + BACK.z},
                 3.14159265f - CAM.yaw);
 
             // The third-person camera SPHERICALLY orbits the player: yaw
@@ -6133,6 +6145,15 @@ static void onKeyboardKey(
 // other things (e.g. switching to a dedicated workspace on the way in and
 // back on the way out) can tell the two states apart without tracking its
 // own state, which a config reload would lose.
+// hypr3d.first_person_body([on]): set the first-person body (no argument
+// toggles it); returns the new state.
+static int luaFirstPersonBody(lua_State* L) {
+    g_cfgFpBody = lua_isboolean(L, 1) ? lua_toboolean(L, 1) : !g_cfgFpBody;
+    damageCurrentMonitor();
+    lua_pushboolean(L, g_cfgFpBody);
+    return 1;
+}
+
 static int luaActive(lua_State* L) {
     lua_pushboolean(L, g_active && g_transitionTarget > 0.5f);
     return 1;
@@ -6211,6 +6232,9 @@ static int luaConfig(lua_State* L) {
     //         flying = true,                -- false: gravity, Space jumps,
     //                                       -- Shift does nothing
     //         walk_bob = true,              -- camera sway while walking
+    //         first_person_body = false,    -- see the (headless) character
+    //                                       -- in first person
+    //         first_person_offset = 0.2,    -- body metres behind the eye
     //     },
     //     map = {
     //         path = "~/map.glb",
@@ -6493,6 +6517,12 @@ static int luaConfig(lua_State* L) {
             return luaL_error(L, "hypr3d.config: player.flying must be a boolean");
         if (!SET_BOOL(idx, "walk_bob", g_cfgWalkBob, "player.walk_bob"))
             return luaL_error(L, "hypr3d.config: player.walk_bob must be a boolean");
+        if (!SET_BOOL(idx, "first_person_body", g_cfgFpBody,
+                      "player.first_person_body"))
+            return luaL_error(L, "hypr3d.config: player.first_person_body must be a boolean");
+        if (!SET_NUM(idx, "first_person_offset", g_cfgFpBodyBack,
+                     "player.first_person_offset"))
+            return luaL_error(L, "hypr3d.config: player.first_person_offset must be a number");
         if (!SET_BOOL(idx, "collision", g_playerCollision, "player.collision"))
             return luaL_error(L, "hypr3d.config: player.collision must be a boolean");
 
@@ -6974,6 +7004,10 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
 
     if (!HyprlandAPI::addLuaFunction(PHANDLE, "hypr3d", "close", luaClose))
         throw std::runtime_error("[hypr3d] failed to register Lua close");
+
+    if (!HyprlandAPI::addLuaFunction(PHANDLE, "hypr3d", "first_person_body",
+                                     luaFirstPersonBody))
+        throw std::runtime_error("[hypr3d] failed to register Lua first_person_body");
 
     if (!HyprlandAPI::addLuaFunction(PHANDLE, "hypr3d", "active", luaActive))
         throw std::runtime_error("[hypr3d] failed to register Lua active");

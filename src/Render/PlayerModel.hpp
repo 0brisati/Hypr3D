@@ -118,6 +118,12 @@ class CPlayerModel {
         m_flat = flat;
     }
 
+    // Collapse the head joints (first-person body view). Takes effect on
+    // the next update().
+    void setHideHead(bool hide) {
+        m_hideHead = hide;
+    }
+
     // Playback speed multiplier for a state's clip (1 = as authored).
     void setAnimSpeed(EState state, float speed) {
         if (state >= EState::Idle && state <= EState::Jump &&
@@ -253,6 +259,11 @@ class CPlayerModel {
     // bind bakes it in), false = glTF spec (see load()).
     std::vector<bool>      m_skinMeshWorld;
     std::vector<SPrim>     m_prims;
+    // First-person body: the head subtree (the shallowest node named
+    // "head*" and everything under it) collapses to a point so the eye,
+    // which sits inside it, sees the shoulders and body instead.
+    std::vector<bool>      m_inHead;
+    bool                   m_hideHead = false;
 
     EState m_state      = EState::Idle;
     EState m_prevState  = EState::Idle;
