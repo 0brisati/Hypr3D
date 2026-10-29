@@ -356,6 +356,17 @@ bool CPlayerModel::setAnim(EState state, const std::string& name) {
     return false;
 }
 
+bool CPlayerModel::playOnce(const std::string& name) {
+    for (int i = 0; i < static_cast<int>(m_anims.size()); ++i) {
+        if (m_anims[i].name == name && m_anims[i].duration > 0.f) {
+            m_onceAnim = i;
+            m_onceTime = 0.f;
+            return true;
+        }
+    }
+    return false;
+}
+
 // --- pose / evaluation --------------------------------------------------------
 
 void CPlayerModel::setPose(const Vec3& feet, float yawRad,
@@ -426,6 +437,25 @@ void CPlayerModel::evaluateNodes() {
         }
     }
 
+    // One-shot gesture layered on top: ease in over 0.08 s, out over the
+    // last 0.15 s, rotations only, on the clip's own nodes.
+    if (m_onceAnim >= 0 && m_onceAnim < static_cast<int>(m_anims.size())) {
+        const auto& A   = m_anims[m_onceAnim];
+        const float DUR = A.duration;
+        const float IN  = std::min(1.f, m_onceTime / 0.08f);
+        const float OUT = std::min(1.f, std::max(0.f, (DUR - m_onceTime) / 0.15f));
+        float W = std::min(IN, OUT);
+        W = W * W * (3.f - 2.f * W);
+        for (const auto& C : A.channels) {
+            if (C.path != 1 || C.node < 0 || C.node >= static_cast<int>(NN) ||
+                C.sampler < 0 || C.sampler >= static_cast<int>(m_samplers.size()))
+                continue;
+            float V[4];
+            m_samplers[C.sampler].sample(m_onceTime, V);
+            R[C.node] = SQuat::slerp(R[C.node], SQuat{V[0], V[1], V[2], V[3]}, W);
+        }
+    }
+
     m_world.assign(NN, Mat4::identity());
     for (const int I : m_order) {
         const Mat4 LOCAL = Mat4::translation(T[I]) * (quatToMat4(R[I]) *
@@ -475,6 +505,13 @@ void CPlayerModel::update(float dt) {
             else
                 m_prevTime = std::fmod(m_prevTime, PDUR);
         }
+    }
+
+    if (m_onceAnim >= 0) {
+        m_onceTime += std::max(dt, 0.f);
+        if (m_onceAnim >= static_cast<int>(m_anims.size()) ||
+            m_onceTime >= m_anims[m_onceAnim].duration)
+            m_onceAnim = -1;
     }
 
     evaluateNodes();

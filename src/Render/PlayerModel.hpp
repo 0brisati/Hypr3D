@@ -108,6 +108,11 @@ class CPlayerModel {
     void setAnim(EState state, int index);
     bool setAnim(EState state, const std::string& name);
 
+    // One-shot gesture (hypr3d.gesture): plays the named clip once on top of
+    // the current state, only on the nodes that clip animates (rotations),
+    // easing in and out. False when there is no such clip.
+    bool playOnce(const std::string& name);
+
     // World placement of the model's ORIGIN (feet for character exports):
     // anchor offset (rotates with the model), facing (yaw radians),
     // per-axis scale. Also the material overrides from the shared mesh
@@ -270,6 +275,8 @@ class CPlayerModel {
     // which sits inside it, sees the shoulders and body instead.
     std::vector<bool>      m_inHead;
     bool                   m_hideHead = false;
+    int                    m_onceAnim = -1;
+    float                  m_onceTime = 0.f;
     std::vector<std::string> m_screenMaterials;
 
     EState m_state      = EState::Idle;

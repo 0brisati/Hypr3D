@@ -6203,6 +6203,17 @@ static int luaPower(lua_State* L) {
     return 1;
 }
 
+// hypr3d.gesture(name): play the player's clip `name` once over the current
+// animation (e.g. "Interact", a hand reaching out). Returns false when the
+// character has no such clip.
+static int luaGesture(lua_State* L) {
+    const char* NAME = luaL_checkstring(L, 1);
+    const bool OK = g_scene.player() && g_scene.player()->playOnce(NAME);
+    damageCurrentMonitor();
+    lua_pushboolean(L, OK);
+    return 1;
+}
+
 static int luaFirstPersonBody(lua_State* L) {
     g_cfgFpBody = lua_isboolean(L, 1) ? lua_toboolean(L, 1) : !g_cfgFpBody;
     damageCurrentMonitor();
@@ -7186,6 +7197,9 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
 
     if (!HyprlandAPI::addLuaFunction(PHANDLE, "hypr3d", "power", luaPower))
         throw std::runtime_error("[hypr3d] failed to register Lua power");
+
+    if (!HyprlandAPI::addLuaFunction(PHANDLE, "hypr3d", "gesture", luaGesture))
+        throw std::runtime_error("[hypr3d] failed to register Lua gesture");
 
     if (!HyprlandAPI::addLuaFunction(PHANDLE, "hypr3d", "active", luaActive))
         throw std::runtime_error("[hypr3d] failed to register Lua active");
