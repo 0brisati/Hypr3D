@@ -83,6 +83,11 @@ class CMapModel {
     // primitives -- all of them, or only those whose material is listed.
     // Lit surfaces keep following the room light.
     static inline std::unordered_map<std::string, float> s_power; // group -> 0..1
+    // Screens: emissive primitives (only power_materials ones when listed)
+    // ignore the room light -- they go dark only through their power group.
+    void setScreens(bool on) {
+        m_screens = on;
+    }
     void setPower(std::vector<std::string> groups, std::vector<std::string> materials) {
         m_powerGroups    = std::move(groups);
         m_powerMaterials = std::move(materials);
@@ -252,6 +257,7 @@ class CMapModel {
     bool                    m_selfLit = false;
     float                   m_darkLevel = -1.0f;
     std::vector<std::string> m_powerGroups, m_powerMaterials;
+    bool                    m_screens = false;
     int                     m_uPower = -1;
     int                     m_uAlphaMode = -1;
     int                     m_uAlphaCutoff = -1;

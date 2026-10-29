@@ -176,6 +176,7 @@ class GLScene {
         Vec3        scale{1.f, 1.f, 1.f};
         float       emissiveScale = 1.0f;
         bool        flat = false;  // true: raw texture, no headlight shading
+        std::vector<std::string> screenMaterials; // ignore the room light
         std::string center;       // parsed for format parity; the player
         Vec3        centerOffset{}; // rotates around its anchor, so only
                                   // center_offset (the anchor shift) applies
@@ -224,6 +225,7 @@ class GLScene {
         bool selfLit = false; // ignores the room light level
         float darkLevel = -1.0f; // own lights-off level, < 0 = the room's
         std::vector<std::string> power, powerMaterials; // hypr3d.power groups
+        bool screens = false; // emissive parts ignore the room light
         CMapModel::ECenter center = CMapModel::ECenter::Logical;
         Vec3 centerOffset{};
     };

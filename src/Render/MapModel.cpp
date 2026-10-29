@@ -987,7 +987,8 @@ void CMapModel::draw(const Mat4& vp, const Vec3& cameraPos) const {
     glUniform1i(m_uTex, 0);
     glUniform1i(m_uEmissive, 1);
     glUniform1i(m_uFlat, m_flat ? 1 : 0);
-    glUniform1f(m_uLight, lightLevel());
+    const float LIGHT = lightLevel();
+    glUniform1f(m_uLight, LIGHT);
     const float POWER = powerLevel();
 
     glEnable(GL_DEPTH_TEST);
@@ -1009,6 +1010,11 @@ void CMapModel::draw(const Mat4& vp, const Vec3& cameraPos) const {
             (P.emissiveFactor[0] > 0.f || P.emissiveFactor[1] > 0.f ||
              P.emissiveFactor[2] > 0.f);
         glUniform1i(m_uHasEmissive, HAS_EMISSIVE ? 1 : 0);
+        const bool SCREEN = m_screens && HAS_EMISSIVE &&
+            (m_powerMaterials.empty() ||
+             std::find(m_powerMaterials.begin(), m_powerMaterials.end(),
+                       P.material) != m_powerMaterials.end());
+        glUniform1f(m_uLight, SCREEN ? 1.0f : LIGHT);
         glUniform3f(m_uEmissiveFactor, P.emissiveFactor[0], P.emissiveFactor[1],
                     P.emissiveFactor[2]);
         glUniform1f(m_uEmissiveStrength, P.emissiveStrength * m_emissiveScale);

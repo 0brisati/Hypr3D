@@ -493,6 +493,7 @@ struct SSceneObjectCfg {
     bool        selfLit = false; // keeps glowing when the room lights go down
     float       darkLevel = -1.0f; // own lights-off level (< 0 = world.dark_level)
     std::vector<std::string> power, powerMaterials; // hypr3d.power groups
+    bool        screens = false; // emissive parts ignore the room light
     CMapModel::ECenter center = CMapModel::ECenter::Logical;
     Vec3        centerOffset{}; // extra pivot shift, local units
 };
@@ -3887,6 +3888,7 @@ static void update3D(float dt) {
         SPEC.darkLevel     = OBJ.darkLevel;
         SPEC.power         = OBJ.power;
         SPEC.powerMaterials = OBJ.powerMaterials;
+        SPEC.screens       = OBJ.screens;
         SPEC.center        = OBJ.center;
         SPEC.centerOffset  = OBJ.centerOffset;
         SPECS.push_back(SPEC);
@@ -6652,6 +6654,9 @@ static int luaConfig(lua_State* L) {
             return true;
         };
 
+        if (!SET_STRINGS(idx, "screen_materials", g_playerCfg.screenMaterials))
+            return luaL_error(L, "hypr3d.config: player.screen_materials must be a list of strings");
+
         // player.mesh: the character's visual, described exactly like a
         // scene object's mesh. The transform.position anchors the model
         // relative to the feet, rotation.y corrects the authored facing.
@@ -6907,6 +6912,10 @@ static int luaConfig(lua_State* L) {
             if (!SET_STRINGS(OIDX, "power", OBJ.power)) {
                 lua_pop(L, 1);
                 return luaL_error(L, "hypr3d.config: scene.<name>.power must be a string or a list of strings");
+            }
+            if (!SET_BOOL(OIDX, "screens", OBJ.screens, "scene.<name>.screens")) {
+                lua_pop(L, 1);
+                return luaL_error(L, "hypr3d.config: scene.<name>.screens must be a boolean");
             }
             if (!SET_STRINGS(OIDX, "power_materials", OBJ.powerMaterials)) {
                 lua_pop(L, 1);

@@ -120,6 +120,11 @@ class CPlayerModel {
 
     // Collapse the head joints (first-person body view). Takes effect on
     // the next update().
+    // Materials that ignore the room light (a wrist screen).
+    void setScreenMaterials(const std::vector<std::string>& m) {
+        m_screenMaterials = m;
+    }
+
     void setHideHead(bool hide) {
         m_hideHead = hide;
     }
@@ -214,6 +219,7 @@ class CPlayerModel {
         unsigned int texture = 0;
         float        color[4] = {1.f, 1.f, 1.f, 1.f};
         int          node = -1;
+        std::string  material; // glTF material name
         // Base (node-space) vertices: positions + normals are transformed
         // and re-uploaded every update(); the uvs are static.
         std::vector<float> basePos;
@@ -264,6 +270,7 @@ class CPlayerModel {
     // which sits inside it, sees the shoulders and body instead.
     std::vector<bool>      m_inHead;
     bool                   m_hideHead = false;
+    std::vector<std::string> m_screenMaterials;
 
     EState m_state      = EState::Idle;
     EState m_prevState  = EState::Idle;

@@ -935,6 +935,8 @@ bool CPlayerModel::load(const std::string& path) {
 
             if (PR.material) {
                 const auto& M = *PR.material;
+                if (M.name)
+                    P.material = M.name;
                 for (int k = 0; k < 4; ++k)
                     P.color[k] = M.pbr_metallic_roughness.base_color_factor[k];
                 if (M.pbr_metallic_roughness.base_color_texture.texture &&
@@ -1165,6 +1167,10 @@ void CPlayerModel::draw(const Mat4& vp, const Vec3& cameraPos) const {
                     P.color[1] * m_emissiveScale,
                     P.color[2] * m_emissiveScale, P.color[3]);
         glUniform1i(m_uHasTex, P.texture != 0);
+        glUniform1f(m_uLight,
+                    std::find(m_screenMaterials.begin(), m_screenMaterials.end(),
+                              P.material) != m_screenMaterials.end()
+                        ? 1.0f : CMapModel::s_lightLevel);
         glBindTexture(GL_TEXTURE_2D, P.texture);
         glBindVertexArray(P.vao);
         if (P.indexed)
