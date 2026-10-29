@@ -15,6 +15,7 @@
 #include <hyprgraphics/image/Image.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstring>
 #include <memory>
@@ -490,6 +491,12 @@ void CPlayerModel::update(float dt) {
             const Mat4 WJ = N >= 0 && N < static_cast<int>(m_world.size())
                 ? m_world[N] : Mat4::identity();
             OUT[j] = WJ * SK.invBind[j];
+            // Hidden head: every vertex on this joint lands on the joint's
+            // own origin (zero scale), so the head shrinks to the neck.
+            if (m_hideHead && N >= 0 && N < static_cast<int>(m_inHead.size()) &&
+                m_inHead[N])
+                OUT[j] = Mat4::translation(Vec3{WJ.m[12], WJ.m[13], WJ.m[14]}) *
+                    Mat4::scale(Vec3{0.f, 0.f, 0.f});
         }
     }
 
@@ -746,6 +753,31 @@ bool CPlayerModel::load(const std::string& path) {
         };
         return DEPTH(A) < DEPTH(B);
     });
+
+    // Head subtree for the first-person body: the shallowest "head*" node
+    // (case-insensitive), then its descendants (m_order is parents first).
+    m_inHead.assign(m_nodes.size(), false);
+    {
+        int headNode = -1, headDepth = 1 << 30;
+        for (cgltf_size i = 0; i < data->nodes_count; ++i) {
+            std::string nm = data->nodes[i].name ? data->nodes[i].name : "";
+            for (auto& c : nm)
+                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            if (nm.rfind("head", 0) != 0)
+                continue;
+            int d = 0;
+            for (int p = m_nodes[i].parent; p >= 0 && d < 256; p = m_nodes[p].parent)
+                ++d;
+            if (d < headDepth)
+                headDepth = d, headNode = static_cast<int>(i);
+        }
+        if (headNode >= 0) {
+            m_inHead[headNode] = true;
+            for (const int I : m_order)
+                if (m_nodes[I].parent >= 0 && m_inHead[m_nodes[I].parent])
+                    m_inHead[I] = true;
+        }
+    }
 
     // Skins.
     m_skins.clear();
@@ -1104,6 +1136,10 @@ void CPlayerModel::draw(const Mat4& vp, const Vec3& cameraPos) const {
 
     for (const auto& P : m_prims) {
         if (!P.count)
+            continue;
+        // Rigid parts riding the head (a separate helmet mesh).
+        if (m_hideHead && P.skin < 0 && P.node >= 0 &&
+            P.node < static_cast<int>(m_inHead.size()) && m_inHead[P.node])
             continue;
 
         if (P.gpuSkinned) {

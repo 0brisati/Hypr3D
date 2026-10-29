@@ -200,6 +200,11 @@ class GLScene {
         m_playerVisible = on;
     }
 
+    // First-person body: draw the character headless under the eye.
+    void setPlayerHeadless(bool on) {
+        m_player.setHideHead(on);
+    }
+
     CPlayerModel* player() {
         return &m_player;
     }
