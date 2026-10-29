@@ -66,8 +66,26 @@ class CMapModel {
     // Room light level shared by every scene model (1 = as authored, 0 =
     // black); self-lit models (screens, neon, glow quads) ignore it.
     static inline float s_lightLevel = 1.0f;
+    static inline float s_darkLevel  = 0.15f; // the level "lights off" fades to
     void setSelfLit(bool on) {
         m_selfLit = on;
+    }
+    // This model's own lights-off level (< 0 = follow the room): a neon tube
+    // can stay visibly coloured while the room goes black, a glow quad can
+    // vanish (blended materials fade their alpha with the level too).
+    void setDarkLevel(float d) {
+        m_darkLevel = d;
+    }
+    float lightLevel() const {
+        if (m_selfLit)
+            return 1.0f;
+        if (m_darkLevel < 0.0f)
+            return s_lightLevel;
+        const float SPAN = 1.0f - s_darkLevel;
+        const float T = SPAN > 1e-4f ? (s_lightLevel - s_darkLevel) / SPAN
+                                     : (s_lightLevel >= 1.0f ? 1.0f : 0.0f);
+        const float C = T < 0.0f ? 0.0f : (T > 1.0f ? 1.0f : T);
+        return m_darkLevel + (1.0f - m_darkLevel) * C;
     }
 
     // Global emissive multiplier (config); 0 = pure lambert, 1 = as authored.
@@ -212,6 +230,7 @@ class CMapModel {
     int                     m_uFlat = -1;
     int                     m_uLight = -1;
     bool                    m_selfLit = false;
+    float                   m_darkLevel = -1.0f;
     int                     m_uAlphaMode = -1;
     int                     m_uAlphaCutoff = -1;
 

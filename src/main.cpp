@@ -490,6 +490,7 @@ struct SSceneObjectCfg {
     bool        dynamic = false; // static = false -> grabbable with Super+LMB
     bool        physics = false; // gravity + world collisions (dynamic only)
     bool        selfLit = false; // keeps glowing when the room lights go down
+    float       darkLevel = -1.0f; // own lights-off level (< 0 = world.dark_level)
     CMapModel::ECenter center = CMapModel::ECenter::Logical;
     Vec3        centerOffset{}; // extra pivot shift, local units
 };
@@ -3877,6 +3878,7 @@ static void update3D(float dt) {
         SPEC.emissiveScale = OBJ.emissiveScale;
         SPEC.flat          = OBJ.flat;
         SPEC.selfLit       = OBJ.selfLit;
+        SPEC.darkLevel     = OBJ.darkLevel;
         SPEC.center        = OBJ.center;
         SPEC.centerOffset  = OBJ.centerOffset;
         SPECS.push_back(SPEC);
@@ -6416,6 +6418,7 @@ static int luaConfig(lua_State* L) {
         if (!SET_NUM(idx, "dark_level", g_cfgDarkLevel, "world.dark_level"))
             return luaL_error(L, "hypr3d.config: world.dark_level must be a number");
         g_cfgDarkLevel = std::clamp(g_cfgDarkLevel, 0.0f, 1.0f);
+        CMapModel::s_darkLevel = g_cfgDarkLevel;
         lua_pop(L, 1);
     }
 
@@ -6839,6 +6842,10 @@ static int luaConfig(lua_State* L) {
             if (!SET_BOOL(OIDX, "self_lit", OBJ.selfLit, "scene.<name>.self_lit")) {
                 lua_pop(L, 1);
                 return luaL_error(L, "hypr3d.config: scene.<name>.self_lit must be a boolean");
+            }
+            if (!SET_NUM(OIDX, "dark_level", OBJ.darkLevel, "scene.<name>.dark_level")) {
+                lua_pop(L, 1);
+                return luaL_error(L, "hypr3d.config: scene.<name>.dark_level must be a number");
             }
 
             // mesh = { ... }: the shared visual description -- overrides

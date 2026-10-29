@@ -119,6 +119,8 @@ void main() {
             fragColor = vec4(base, alpha);
         }
         fragColor.rgb *= uLight;
+        if (uAlphaMode == 2)
+            fragColor.a *= uLight;
         return;
     }
 
@@ -143,6 +145,8 @@ void main() {
         fragColor = vec4(base * mix(vec3(0.6), vec3(1.0), wrap), alpha);
     }
     fragColor.rgb *= uLight;
+    if (uAlphaMode == 2)
+        fragColor.a *= uLight;
 }
 )GLSL";
 
@@ -979,7 +983,7 @@ void CMapModel::draw(const Mat4& vp, const Vec3& cameraPos) const {
     glUniform1i(m_uTex, 0);
     glUniform1i(m_uEmissive, 1);
     glUniform1i(m_uFlat, m_flat ? 1 : 0);
-    glUniform1f(m_uLight, m_selfLit ? 1.0f : s_lightLevel);
+    glUniform1f(m_uLight, lightLevel());
 
     glEnable(GL_DEPTH_TEST);
 
