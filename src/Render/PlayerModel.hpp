@@ -113,6 +113,10 @@ class CPlayerModel {
     // easing in and out. False when there is no such clip.
     bool playOnce(const std::string& name);
 
+    // Held pose (hypr3d.sit): the named clip's first frame overrides the
+    // nodes it animates, eased in/out over 0.3 s; "" releases it.
+    void setHold(const std::string& name);
+
     // World placement of the model's ORIGIN (feet for character exports):
     // anchor offset (rotates with the model), facing (yaw radians),
     // per-axis scale. Also the material overrides from the shared mesh
@@ -276,6 +280,8 @@ class CPlayerModel {
     std::vector<bool>      m_inHead;
     bool                   m_hideHead = false;
     int                    m_onceAnim = -1;
+    int                    m_holdAnim = -1, m_holdTarget = -1;
+    float                  m_holdW = 0.f;
     float                  m_onceTime = 0.f;
     std::vector<std::string> m_screenMaterials;
 

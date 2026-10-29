@@ -445,6 +445,18 @@ static bool        g_cfgUnderLayers = true;
 static float       g_cfgWindowScale   = 0.08f;   // room multiplier on window size
 static float       g_cfgDarkLevel     = 0.15f;   // room light level with the lights off
 static float       g_lightTarget      = 1.0f;    // hypr3d.lights(): where the level fades to
+// player.seat: a chair the player can sit in (hypr3d.sit(), and on entering 3D)
+struct SSeatCfg {
+    bool  valid = false;
+    float x = 0.f, y = 0.5f, z = 0.f; // seat surface centre (y = its height)
+    float yawDeg = 0.f;               // facing (camera yaw convention)
+    float eye = 0.75f;                // eye height above the seat surface
+    float hip = 0.9f;                 // the character's standing hip height
+    bool  onEnter = true;             // entering 3D starts seated
+    std::string pose = "Sit";         // the character's held seated clip
+};
+static SSeatCfg g_seat;
+static bool     g_seated = false;
 static std::unordered_map<std::string, float> g_powerTarget; // hypr3d.power(): group -> 0/1
 static float       g_cfgSpawnDistance = 5.0f;    // units in front of the camera
 static float       g_cfgWindowDepth   = 0.05f;   // slab thickness, 0 = flat quads
@@ -3608,6 +3620,17 @@ static void enter3D() {
 
     resetMovementKeys();
 
+    // player.seat.on_enter: every 3D session starts seated in the chair.
+    if (g_seat.valid && g_seat.onEnter) {
+        g_seated = true;
+        auto& SCAM = g_scene.camera();
+        SCAM.yaw      = g_seat.yawDeg * 3.14159265f / 180.f;
+        SCAM.pitch    = 0.f;
+        SCAM.position = Vec3{g_seat.x, g_seat.y + g_seat.eye, g_seat.z};
+        if (g_scene.player())
+            g_scene.player()->setHold(g_seat.pose);
+    }
+
     g_grounded = false;
     // The camera mode (F5: first person / third behind / third front) rides
     // the same cross-session memory as the camera pose.
@@ -3979,7 +4002,8 @@ static void update3D(float dt) {
         // NOT gate this.)
         if (!g_playerBody.IsInvalid()) {
             const auto PPOS = g_bodyIf->GetPosition(g_playerBody);
-            const Vec3 EYE{PPOS.GetX(), PPOS.GetY() + PLAYER_EYE_OFF,
+            const Vec3 EYE{PPOS.GetX(),
+                           g_seated ? g_seat.y + g_seat.eye : PPOS.GetY() + PLAYER_EYE_OFF,
                            PPOS.GetZ()};
             auto& CAM = g_scene.camera();
 
@@ -4105,7 +4129,27 @@ static void update3D(float dt) {
                     JPH::Quat::sIdentity(), JPH::EActivation::Activate);
         }
 
-        applyCameraMovement(dt); // -> s_moveVel
+        // Seated: any movement key stands up; until then the body stays on
+        // the seat's spot (the camera rides g_seat.eye above the seat).
+        if (g_seated && (g_keyFwd || g_keyBack || g_keyLeft || g_keyRight ||
+                         g_keyUp || g_playerJumpQueued)) {
+            g_seated = false;
+            g_playerJumpQueued = false;
+            if (g_scene.player())
+                g_scene.player()->setHold("");
+        }
+        if (g_seated) {
+            const auto CUR = g_bodyIf->GetPosition(g_playerBody);
+            g_bodyIf->SetPosition(g_playerBody,
+                                  JPH::RVec3(g_seat.x, CUR.GetY(), g_seat.z),
+                                  JPH::EActivation::Activate);
+            const auto V = g_bodyIf->GetLinearVelocity(g_playerBody);
+            g_bodyIf->SetLinearVelocity(g_playerBody, JPH::Vec3(0.f, V.GetY(), 0.f));
+            s_moveVel = Vec3{};
+            if (g_scene.player())
+                g_scene.player()->setHold(g_seat.pose); // the model may load late
+        } else
+            applyCameraMovement(dt); // -> s_moveVel
 
         // The character's facing: RY(pi - yaw) maps the authored +Z front
         // onto the look direction. Applied AFTER this frame's look update
@@ -4116,14 +4160,20 @@ static void update3D(float dt) {
             // First-person body: the feet step back along the facing, so
             // the eye sits just in front of the (hidden) face and looking
             // down shows the chest and legs rather than their insides.
+            const float SEAT_YAW = g_seat.yawDeg * 3.14159265f / 180.f;
+            const Vec3 FACE = g_seated ? Vec3{std::sin(SEAT_YAW), 0.f, -std::cos(SEAT_YAW)}
+                                       : CAM.flatForward();
             const Vec3 BACK = g_viewMode == 0 && g_cfgFpBody
-                ? CAM.flatForward() * (-g_cfgFpBodyBack)
+                ? FACE * (-g_cfgFpBodyBack)
                 : Vec3{};
+            // Seated: the hips sit on the seat (the held Sit clip folds the
+            // legs), so the model's feet anchor drops by the hip height.
             g_scene.setPlayerPose(
                 Vec3{PPOS.GetX() + BACK.x,
-                     PPOS.GetY() - Camera::kBodyHeight * 0.5f,
+                     g_seated ? g_seat.y - g_seat.hip
+                              : PPOS.GetY() - Camera::kBodyHeight * 0.5f,
                      PPOS.GetZ() + BACK.z},
-                3.14159265f - CAM.yaw);
+                3.14159265f - (g_seated ? SEAT_YAW : CAM.yaw));
 
             // The third-person camera SPHERICALLY orbits the player: yaw
             // sweeps the horizontal ring, pitch lifts/drops the camera
@@ -4900,7 +4950,8 @@ static void dumpStatus() {
             << PP.GetZ() << ") vel=(" << PV.GetX() << "," << PV.GetY()
             << "," << PV.GetZ() << ") moveVel=(" << s_moveVel.x << ","
             << s_moveVel.y << "," << s_moveVel.z << ") grounded="
-            << g_grounded << " flying=" << g_playerFlying << "\n";
+            << g_grounded << " flying=" << g_playerFlying
+            << " seated=" << g_seated << "\n";
     }
 }
 
@@ -6214,6 +6265,32 @@ static int luaGesture(lua_State* L) {
     return 1;
 }
 
+// hypr3d.sit([on]): sit in player.seat (no argument: sit down); false
+// stands up. Returns whether the player is seated.
+static int luaSit(lua_State* L) {
+    const bool ON = lua_isboolean(L, 1) ? lua_toboolean(L, 1) != 0 : true;
+    if (ON && g_seat.valid) {
+        g_seated = true;
+        auto& CAM = g_scene.camera();
+        CAM.yaw = g_seat.yawDeg * 3.14159265f / 180.f;
+        CAM.position = Vec3{g_seat.x, g_seat.y + g_seat.eye, g_seat.z};
+        if (g_bodyIf && !g_playerBody.IsInvalid()) {
+            const auto CUR = g_bodyIf->GetPosition(g_playerBody);
+            g_bodyIf->SetPosition(g_playerBody, JPH::RVec3(g_seat.x, CUR.GetY(), g_seat.z),
+                                  JPH::EActivation::Activate);
+        }
+        if (g_scene.player())
+            g_scene.player()->setHold(g_seat.pose);
+    } else if (!ON && g_seated) {
+        g_seated = false;
+        if (g_scene.player())
+            g_scene.player()->setHold("");
+    }
+    damageCurrentMonitor();
+    lua_pushboolean(L, g_seated);
+    return 1;
+}
+
 static int luaFirstPersonBody(lua_State* L) {
     g_cfgFpBody = lua_isboolean(L, 1) ? lua_toboolean(L, 1) : !g_cfgFpBody;
     damageCurrentMonitor();
@@ -6717,6 +6794,27 @@ static int luaConfig(lua_State* L) {
             return true;
         };
 
+        // player.seat = { x, y, z, yaw, eye, hip, on_enter, pose }
+        lua_getfield(L, idx, "seat");
+        if (lua_istable(L, -1)) {
+            const int ST = lua_gettop(L);
+            SSeatCfg S;
+            S.valid = true;
+            if (!SET_NUM(ST, "x", S.x, "player.seat.x") || !SET_NUM(ST, "y", S.y, "player.seat.y") ||
+                !SET_NUM(ST, "z", S.z, "player.seat.z") || !SET_NUM(ST, "yaw", S.yawDeg, "player.seat.yaw") ||
+                !SET_NUM(ST, "eye", S.eye, "player.seat.eye") || !SET_NUM(ST, "hip", S.hip, "player.seat.hip") ||
+                !SET_BOOL(ST, "on_enter", S.onEnter, "player.seat.on_enter") ||
+                !SET_STRING(ST, "pose", S.pose, "player.seat.pose")) {
+                lua_pop(L, 1);
+                return luaL_error(L, "hypr3d.config: player.seat fields are numbers (x, y, z, yaw, eye, hip), on_enter a boolean, pose a string");
+            }
+            g_seat = S;
+        } else if (!lua_isnil(L, -1)) {
+            lua_pop(L, 1);
+            return luaL_error(L, "hypr3d.config: player.seat must be a table");
+        }
+        lua_pop(L, 1);
+
         if (!SET_STRINGS(idx, "screen_materials", g_playerCfg.screenMaterials))
             return luaL_error(L, "hypr3d.config: player.screen_materials must be a list of strings");
 
@@ -7200,6 +7298,9 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
 
     if (!HyprlandAPI::addLuaFunction(PHANDLE, "hypr3d", "gesture", luaGesture))
         throw std::runtime_error("[hypr3d] failed to register Lua gesture");
+
+    if (!HyprlandAPI::addLuaFunction(PHANDLE, "hypr3d", "sit", luaSit))
+        throw std::runtime_error("[hypr3d] failed to register Lua sit");
 
     if (!HyprlandAPI::addLuaFunction(PHANDLE, "hypr3d", "active", luaActive))
         throw std::runtime_error("[hypr3d] failed to register Lua active");

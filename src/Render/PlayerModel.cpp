@@ -367,6 +367,15 @@ bool CPlayerModel::playOnce(const std::string& name) {
     return false;
 }
 
+void CPlayerModel::setHold(const std::string& name) {
+    m_holdTarget = -1;
+    for (int i = 0; i < static_cast<int>(m_anims.size()); ++i)
+        if (!name.empty() && m_anims[i].name == name)
+            m_holdTarget = i;
+    if (m_holdTarget >= 0)
+        m_holdAnim = m_holdTarget;
+}
+
 // --- pose / evaluation --------------------------------------------------------
 
 void CPlayerModel::setPose(const Vec3& feet, float yawRad,
@@ -434,6 +443,23 @@ void CPlayerModel::evaluateNodes() {
             T[i] = TP[i] + (T[i] - TP[i]) * B;
             S[i] = SP[i] + (S[i] - SP[i]) * B;
             R[i] = SQuat::slerp(RP[i], R[i], B);
+        }
+    }
+
+    // Held pose (seated): its clip's first frame, translations and
+    // rotations, at the eased weight.
+    if (m_holdAnim >= 0 && m_holdAnim < static_cast<int>(m_anims.size()) && m_holdW > 0.f) {
+        const float W = m_holdW * m_holdW * (3.f - 2.f * m_holdW);
+        for (const auto& C : m_anims[m_holdAnim].channels) {
+            if (C.node < 0 || C.node >= static_cast<int>(NN) ||
+                C.sampler < 0 || C.sampler >= static_cast<int>(m_samplers.size()))
+                continue;
+            float V[4];
+            m_samplers[C.sampler].sample(0.f, V);
+            if (C.path == 1)
+                R[C.node] = SQuat::slerp(R[C.node], SQuat{V[0], V[1], V[2], V[3]}, W);
+            else if (C.path == 0)
+                T[C.node] = T[C.node] + (Vec3{V[0], V[1], V[2]} - T[C.node]) * W;
         }
     }
 
@@ -505,6 +531,14 @@ void CPlayerModel::update(float dt) {
             else
                 m_prevTime = std::fmod(m_prevTime, PDUR);
         }
+    }
+
+    {
+        const float TGT = m_holdTarget >= 0 ? 1.f : 0.f;
+        const float STEP = std::max(dt, 0.f) / 0.3f;
+        m_holdW = m_holdW < TGT ? std::min(TGT, m_holdW + STEP) : std::max(TGT, m_holdW - STEP);
+        if (m_holdW <= 0.f && m_holdTarget < 0)
+            m_holdAnim = -1;
     }
 
     if (m_onceAnim >= 0) {
