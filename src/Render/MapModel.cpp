@@ -85,6 +85,7 @@ uniform float uEmissiveStrength;
 uniform int uFlat;   // baked-map mode: albedo/emission as-is, no dynamic light
 uniform int uAlphaMode;      // 0 opaque, 1 mask, 2 blend (glTF alphaMode)
 uniform float uAlphaCutoff;  // mask cutoff
+uniform float uLight;        // room light level (1 = as authored)
 
 out vec4 fragColor;
 
@@ -117,6 +118,7 @@ void main() {
                 discard;
             fragColor = vec4(base, alpha);
         }
+        fragColor.rgb *= uLight;
         return;
     }
 
@@ -140,6 +142,7 @@ void main() {
             discard;
         fragColor = vec4(base * mix(vec3(0.6), vec3(1.0), wrap), alpha);
     }
+    fragColor.rgb *= uLight;
 }
 )GLSL";
 
@@ -653,6 +656,7 @@ void CMapModel::finishUpload() {
                 m_uEmissiveFactor   = glGetUniformLocation(P, "uEmissiveFactor");
                 m_uEmissiveStrength = glGetUniformLocation(P, "uEmissiveStrength");
                 m_uFlat             = glGetUniformLocation(P, "uFlat");
+                m_uLight            = glGetUniformLocation(P, "uLight");
                 m_uAlphaMode        = glGetUniformLocation(P, "uAlphaMode");
                 m_uAlphaCutoff      = glGetUniformLocation(P, "uAlphaCutoff");
             }
@@ -975,6 +979,7 @@ void CMapModel::draw(const Mat4& vp, const Vec3& cameraPos) const {
     glUniform1i(m_uTex, 0);
     glUniform1i(m_uEmissive, 1);
     glUniform1i(m_uFlat, m_flat ? 1 : 0);
+    glUniform1f(m_uLight, m_selfLit ? 1.0f : s_lightLevel);
 
     glEnable(GL_DEPTH_TEST);
 

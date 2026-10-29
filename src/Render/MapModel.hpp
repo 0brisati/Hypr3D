@@ -63,6 +63,13 @@ class CMapModel {
     // the mesh's own origin. centerOffset adds on top in local units.
     void setCenter(ECenter mode, const Vec3& offset);
 
+    // Room light level shared by every scene model (1 = as authored, 0 =
+    // black); self-lit models (screens, neon, glow quads) ignore it.
+    static inline float s_lightLevel = 1.0f;
+    void setSelfLit(bool on) {
+        m_selfLit = on;
+    }
+
     // Global emissive multiplier (config); 0 = pure lambert, 1 = as authored.
     void setEmissiveScale(float s) {
         m_emissiveScale = s > 0.f ? s : 0.f;
@@ -203,6 +210,8 @@ class CMapModel {
     int                     m_uEmissiveFactor = -1;
     int                     m_uEmissiveStrength = -1;
     int                     m_uFlat = -1;
+    int                     m_uLight = -1;
+    bool                    m_selfLit = false;
     int                     m_uAlphaMode = -1;
     int                     m_uAlphaCutoff = -1;
 

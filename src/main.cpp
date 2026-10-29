@@ -443,6 +443,8 @@ static bool        g_cfgUnderLayers = true;
 
 // --- windows ----------------------------------------------------------------
 static float       g_cfgWindowScale   = 0.5f;    // room multiplier on window size
+static float       g_cfgDarkLevel     = 0.15f;   // room light level with the lights off
+static float       g_lightTarget      = 1.0f;    // hypr3d.lights(): where the level fades to
 static float       g_cfgSpawnDistance = 5.0f;    // units in front of the camera
 static float       g_cfgWindowDepth   = 0.05f;   // slab thickness, 0 = flat quads
 
@@ -487,6 +489,7 @@ struct SSceneObjectCfg {
     bool        collision = true;
     bool        dynamic = false; // static = false -> grabbable with Super+LMB
     bool        physics = false; // gravity + world collisions (dynamic only)
+    bool        selfLit = false; // keeps glowing when the room lights go down
     CMapModel::ECenter center = CMapModel::ECenter::Logical;
     Vec3        centerOffset{}; // extra pivot shift, local units
 };
@@ -3829,6 +3832,13 @@ static void applyCameraMovement(float dt) {
 }
 
 static void update3D(float dt) {
+    // Room lights: fade the shared level toward hypr3d.lights()'s target.
+    {
+        float& LV = CMapModel::s_lightLevel;
+        const float STEP = std::max(dt, 0.0f) * 2.5f; // full swing in ~0.4 s
+        LV = LV < g_lightTarget ? std::min(g_lightTarget, LV + STEP)
+                                : std::max(g_lightTarget, LV - STEP);
+    }
     // Release capture unconditionally when the view no longer owns input, so
     // a disappearing monitor or a closing transition can never strand the
     // pointer in captured mode.
@@ -3866,6 +3876,7 @@ static void update3D(float dt) {
         SPEC.scale         = OBJ.scale;
         SPEC.emissiveScale = OBJ.emissiveScale;
         SPEC.flat          = OBJ.flat;
+        SPEC.selfLit       = OBJ.selfLit;
         SPEC.center        = OBJ.center;
         SPEC.centerOffset  = OBJ.centerOffset;
         SPECS.push_back(SPEC);
@@ -6147,6 +6158,23 @@ static void onKeyboardKey(
 // own state, which a config reload would lose.
 // hypr3d.first_person_body([on]): set the first-person body (no argument
 // toggles it); returns the new state.
+// hypr3d.lights([level | on]): room light level 0..1 (true = 1, false =
+// world.dark_level, no argument toggles between the two); self_lit scene
+// objects ignore it. Returns the new target level.
+static int luaLights(lua_State* L) {
+    if (lua_isnumber(L, 1))
+        g_lightTarget = std::clamp(static_cast<float>(lua_tonumber(L, 1)), 0.0f, 1.0f);
+    else if (lua_isboolean(L, 1))
+        g_lightTarget = lua_toboolean(L, 1) ? 1.0f : g_cfgDarkLevel;
+    else
+        g_lightTarget = g_lightTarget > 0.5f * (1.0f + g_cfgDarkLevel) ? g_cfgDarkLevel : 1.0f;
+    if (!g_active)
+        CMapModel::s_lightLevel = g_lightTarget; // no frames to fade over
+    damageCurrentMonitor();
+    lua_pushnumber(L, g_lightTarget);
+    return 1;
+}
+
 static int luaFirstPersonBody(lua_State* L) {
     g_cfgFpBody = lua_isboolean(L, 1) ? lua_toboolean(L, 1) : !g_cfgFpBody;
     damageCurrentMonitor();
@@ -6385,6 +6413,9 @@ static int luaConfig(lua_State* L) {
             return luaL_error(L, "hypr3d.config: world.under_layers must be a boolean");
         if (!SET_BOOL(idx, "grid", g_cfgGrid, "world.grid"))
             return luaL_error(L, "hypr3d.config: world.grid must be a boolean");
+        if (!SET_NUM(idx, "dark_level", g_cfgDarkLevel, "world.dark_level"))
+            return luaL_error(L, "hypr3d.config: world.dark_level must be a number");
+        g_cfgDarkLevel = std::clamp(g_cfgDarkLevel, 0.0f, 1.0f);
         lua_pop(L, 1);
     }
 
@@ -6805,6 +6836,10 @@ static int luaConfig(lua_State* L) {
                 lua_pop(L, 1);
                 return luaL_error(L, "hypr3d.config: scene.<name>.center_offset must be a table { x = .., y = .., z = .. }");
             }
+            if (!SET_BOOL(OIDX, "self_lit", OBJ.selfLit, "scene.<name>.self_lit")) {
+                lua_pop(L, 1);
+                return luaL_error(L, "hypr3d.config: scene.<name>.self_lit must be a boolean");
+            }
 
             // mesh = { ... }: the shared visual description -- overrides
             // the legacy flat keys when present.
@@ -7008,6 +7043,9 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     if (!HyprlandAPI::addLuaFunction(PHANDLE, "hypr3d", "first_person_body",
                                      luaFirstPersonBody))
         throw std::runtime_error("[hypr3d] failed to register Lua first_person_body");
+
+    if (!HyprlandAPI::addLuaFunction(PHANDLE, "hypr3d", "lights", luaLights))
+        throw std::runtime_error("[hypr3d] failed to register Lua lights");
 
     if (!HyprlandAPI::addLuaFunction(PHANDLE, "hypr3d", "active", luaActive))
         throw std::runtime_error("[hypr3d] failed to register Lua active");

@@ -1,4 +1,5 @@
 #include "Render/PlayerModel.hpp"
+#include "Render/MapModel.hpp"
 
 #include "../../third_party/cgltf.h"
 
@@ -90,6 +91,7 @@ uniform bool uHasTex;
 uniform bool uFlat;
 uniform vec4 uColor;
 uniform vec3 uCamPos;
+uniform float uLight; // room light level
 
 out vec4 fragColor;
 
@@ -99,7 +101,7 @@ void main() {
     // flat: the texture carries all lighting (baked/toon characters)
     float diff = uFlat ? 1.0 : dot(N, L) * 0.5 + 0.5; // half-lambert
     vec4 base = uHasTex ? texture(uTex, vUv) : vec4(1.0);
-    fragColor = vec4(base.rgb * uColor.rgb * diff, base.a * uColor.a);
+    fragColor = vec4(base.rgb * uColor.rgb * diff * uLight, base.a * uColor.a);
 }
 )GLSL";
 
@@ -1040,6 +1042,7 @@ bool CPlayerModel::load(const std::string& path) {
             m_uSkinned   = glGetUniformLocation(P, "uSkinned");
             m_uMeshWorld = glGetUniformLocation(P, "uMeshWorld");
             m_uFlat      = glGetUniformLocation(P, "uFlat");
+            m_uLight     = glGetUniformLocation(P, "uLight");
         }
         glDeleteShader(VS);
         glDeleteShader(FS);
@@ -1129,6 +1132,7 @@ void CPlayerModel::draw(const Mat4& vp, const Vec3& cameraPos) const {
     glUniformMatrix4fv(m_uModel, 1, GL_FALSE, MODEL.m.data());
     glUniform1i(m_uTex, 0);
     glUniform1i(m_uFlat, m_flat);
+    glUniform1f(m_uLight, CMapModel::s_lightLevel);
     glUniform3f(m_uCamPos, cameraPos.x, cameraPos.y, cameraPos.z);
 
     glActiveTexture(GL_TEXTURE0);

@@ -221,6 +221,7 @@ class GLScene {
         Vec3 position{}, rotationDeg{}, scale{1.0f, 1.0f, 1.0f};
         float emissiveScale = 1.0f;
         bool flat = false; // false = headlight half-lambert shading
+        bool selfLit = false; // ignores the room light level
         CMapModel::ECenter center = CMapModel::ECenter::Logical;
         Vec3 centerOffset{};
     };
