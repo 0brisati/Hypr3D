@@ -442,7 +442,7 @@ static bool        g_cfgGrid = true;
 static bool        g_cfgUnderLayers = true;
 
 // --- windows ----------------------------------------------------------------
-static float       g_cfgWindowScale   = 0.5f;    // room multiplier on window size
+static float       g_cfgWindowScale   = 0.08f;   // room multiplier on window size
 static float       g_cfgDarkLevel     = 0.15f;   // room light level with the lights off
 static float       g_lightTarget      = 1.0f;    // hypr3d.lights(): where the level fades to
 static std::unordered_map<std::string, float> g_powerTarget; // hypr3d.power(): group -> 0/1
