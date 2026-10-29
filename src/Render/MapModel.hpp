@@ -85,18 +85,29 @@ class CMapModel {
     static inline std::unordered_map<std::string, float> s_power; // group -> 0..1
     // Screens: emissive primitives (only power_materials ones when listed)
     // ignore the room light -- they go dark only through their power group.
-    void setScreens(bool on) {
-        m_screens = on;
+    void setScreens(bool on, std::vector<std::string> materials = {}) {
+        m_screens         = on;
+        m_screenMaterials = std::move(materials);
     }
-    void setPower(std::vector<std::string> groups, std::vector<std::string> materials) {
+    // groups: each group with the materials it covers (empty = all, or the
+    // shared power_materials list when set).
+    using PowerList = std::vector<std::pair<std::string, std::vector<std::string>>>;
+    void setPower(PowerList groups, std::vector<std::string> materials) {
         m_powerGroups    = std::move(groups);
         m_powerMaterials = std::move(materials);
     }
-    float powerLevel() const {
-        float p = 1.0f;
-        for (const auto& G : m_powerGroups)
-            if (const auto IT = s_power.find(G); IT != s_power.end())
-                p = std::min(p, IT->second);
+    // 1 = on; the lowest level of the groups covering this material, or -1
+    // when no group covers it.
+    float powerLevel(const std::string& material) const {
+        float p = -1.0f;
+        for (const auto& [G, MATS] : m_powerGroups) {
+            const auto& LIST = MATS.empty() ? m_powerMaterials : MATS;
+            if (!LIST.empty() && std::find(LIST.begin(), LIST.end(), material) == LIST.end())
+                continue;
+            const auto IT = s_power.find(G);
+            const float L = IT != s_power.end() ? IT->second : 1.0f;
+            p = p < 0.0f ? L : std::min(p, L);
+        }
         return p;
     }
 
@@ -256,7 +267,8 @@ class CMapModel {
     int                     m_uLight = -1;
     bool                    m_selfLit = false;
     float                   m_darkLevel = -1.0f;
-    std::vector<std::string> m_powerGroups, m_powerMaterials;
+    PowerList               m_powerGroups;
+    std::vector<std::string> m_powerMaterials, m_screenMaterials;
     bool                    m_screens = false;
     int                     m_uPower = -1;
     int                     m_uAlphaMode = -1;

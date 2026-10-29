@@ -492,7 +492,8 @@ struct SSceneObjectCfg {
     bool        physics = false; // gravity + world collisions (dynamic only)
     bool        selfLit = false; // keeps glowing when the room lights go down
     float       darkLevel = -1.0f; // own lights-off level (< 0 = world.dark_level)
-    std::vector<std::string> power, powerMaterials; // hypr3d.power groups
+    CMapModel::PowerList power; // hypr3d.power groups (+ their materials)
+    std::vector<std::string> powerMaterials, screenMaterials;
     bool        screens = false; // emissive parts ignore the room light
     CMapModel::ECenter center = CMapModel::ECenter::Logical;
     Vec3        centerOffset{}; // extra pivot shift, local units
@@ -3889,6 +3890,7 @@ static void update3D(float dt) {
         SPEC.power         = OBJ.power;
         SPEC.powerMaterials = OBJ.powerMaterials;
         SPEC.screens       = OBJ.screens;
+        SPEC.screenMaterials = OBJ.screenMaterials;
         SPEC.center        = OBJ.center;
         SPEC.centerOffset  = OBJ.centerOffset;
         SPECS.push_back(SPEC);
@@ -6394,6 +6396,56 @@ static int luaConfig(lua_State* L) {
         return true;
     };
 
+    // power = "group" | { "a", "b" } | { a = { "mat", .. }, b = { .. } }
+    const auto SET_POWER = [&](int tidx, CMapModel::PowerList& out) -> bool {
+        lua_getfield(L, tidx, "power");
+        if (lua_isnil(L, -1)) {
+            lua_pop(L, 1);
+            return true;
+        }
+        out.clear();
+        if (lua_type(L, -1) == LUA_TSTRING) {
+            out.push_back({lua_tostring(L, -1), {}});
+            lua_pop(L, 1);
+            return true;
+        }
+        if (!lua_istable(L, -1)) {
+            lua_pop(L, 1);
+            return false;
+        }
+        const int T = lua_gettop(L);
+        lua_pushnil(L);
+        while (lua_next(L, T)) {
+            if (lua_type(L, -2) == LUA_TNUMBER && lua_type(L, -1) == LUA_TSTRING) {
+                out.push_back({lua_tostring(L, -1), {}});
+            } else if (lua_type(L, -2) == LUA_TSTRING && lua_istable(L, -1)) {
+                std::pair<std::string, std::vector<std::string>> E{lua_tostring(L, -2), {}};
+                const int M = lua_gettop(L);
+                for (int i = 1;; ++i) {
+                    lua_rawgeti(L, M, i);
+                    if (lua_type(L, -1) != LUA_TSTRING) {
+                        const bool END = lua_isnil(L, -1);
+                        lua_pop(L, 1);
+                        if (!END) {
+                            lua_pop(L, 3);
+                            return false;
+                        }
+                        break;
+                    }
+                    E.second.emplace_back(lua_tostring(L, -1));
+                    lua_pop(L, 1);
+                }
+                out.push_back(std::move(E));
+            } else {
+                lua_pop(L, 3);
+                return false;
+            }
+            lua_pop(L, 1);
+        }
+        lua_pop(L, 1);
+        return true;
+    };
+
     // Missing axes keep their current values.
     const auto SET_VEC3 = [&](int tidx, const char* key, Vec3& out,
                               const char* path) -> bool {
@@ -6909,9 +6961,13 @@ static int luaConfig(lua_State* L) {
                 lua_pop(L, 1);
                 return luaL_error(L, "hypr3d.config: scene.<name>.dark_level must be a number");
             }
-            if (!SET_STRINGS(OIDX, "power", OBJ.power)) {
+            if (!SET_POWER(OIDX, OBJ.power)) {
                 lua_pop(L, 1);
-                return luaL_error(L, "hypr3d.config: scene.<name>.power must be a string or a list of strings");
+                return luaL_error(L, "hypr3d.config: scene.<name>.power must be a group name, a list of them, or { group = { materials } }");
+            }
+            if (!SET_STRINGS(OIDX, "screen_materials", OBJ.screenMaterials)) {
+                lua_pop(L, 1);
+                return luaL_error(L, "hypr3d.config: scene.<name>.screen_materials must be a list of strings");
             }
             if (!SET_BOOL(OIDX, "screens", OBJ.screens, "scene.<name>.screens")) {
                 lua_pop(L, 1);

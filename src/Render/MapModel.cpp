@@ -989,7 +989,6 @@ void CMapModel::draw(const Mat4& vp, const Vec3& cameraPos) const {
     glUniform1i(m_uFlat, m_flat ? 1 : 0);
     const float LIGHT = lightLevel();
     glUniform1f(m_uLight, LIGHT);
-    const float POWER = powerLevel();
 
     glEnable(GL_DEPTH_TEST);
 
@@ -999,21 +998,24 @@ void CMapModel::draw(const Mat4& vp, const Vec3& cameraPos) const {
         glUniform4f(m_uColor, P.color[0], P.color[1], P.color[2], P.color[3]);
         glUniform1i(m_uAlphaMode, P.alphaMode);
         glUniform1f(m_uAlphaCutoff, P.alphaCutoff);
-        const bool POWERED = !m_powerGroups.empty() &&
-            (m_powerMaterials.empty() ||
-             std::find(m_powerMaterials.begin(), m_powerMaterials.end(),
-                       P.material) != m_powerMaterials.end());
-        glUniform1f(m_uPower, POWERED ? POWER : 1.0f);
+        const float POWER = powerLevel(P.material);
+        glUniform1f(m_uPower, POWER < 0.0f ? 1.0f : POWER);
 
         const bool HAS_EMISSIVE =
             P.emissiveTex != 0 &&
             (P.emissiveFactor[0] > 0.f || P.emissiveFactor[1] > 0.f ||
              P.emissiveFactor[2] > 0.f);
         glUniform1i(m_uHasEmissive, HAS_EMISSIVE ? 1 : 0);
-        const bool SCREEN = m_screens && HAS_EMISSIVE &&
-            (m_powerMaterials.empty() ||
-             std::find(m_powerMaterials.begin(), m_powerMaterials.end(),
-                       P.material) != m_powerMaterials.end());
+        // Screens ignore the room light: every emissive part with
+        // screens = true (only the power_materials ones when listed), and
+        // any part named in screen_materials (a screen's light spill).
+        const bool SCREEN =
+            (m_screens && HAS_EMISSIVE &&
+             (m_powerMaterials.empty() ||
+              std::find(m_powerMaterials.begin(), m_powerMaterials.end(),
+                        P.material) != m_powerMaterials.end())) ||
+            std::find(m_screenMaterials.begin(), m_screenMaterials.end(),
+                      P.material) != m_screenMaterials.end();
         glUniform1f(m_uLight, SCREEN ? 1.0f : LIGHT);
         glUniform3f(m_uEmissiveFactor, P.emissiveFactor[0], P.emissiveFactor[1],
                     P.emissiveFactor[2]);
