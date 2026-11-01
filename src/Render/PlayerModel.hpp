@@ -117,6 +117,18 @@ class CPlayerModel {
     // nodes it animates, eased in/out over 0.3 s; "" releases it.
     void setHold(const std::string& name);
 
+    // How far the held clip `name` is blended in (0..1; 0 when another or
+    // no clip is held).
+    float holdWeight(const std::string& name) const {
+        return m_holdAnim >= 0 && m_holdAnim < static_cast<int>(m_anims.size()) &&
+                m_anims[m_holdAnim].name == name ? m_holdW : 0.f;
+    }
+
+    // The player.screen_image texture (0 when none is loaded).
+    unsigned int screenImageTexture() const {
+        return m_screenTex;
+    }
+
     // World placement of the model's ORIGIN (feet for character exports):
     // anchor offset (rotates with the model), facing (yaw radians),
     // per-axis scale. Also the material overrides from the shared mesh

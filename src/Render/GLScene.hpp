@@ -204,6 +204,7 @@ class GLScene {
 
     // First-person body: draw the character headless under the eye.
     void setPlayerHeadless(bool on) {
+        m_playerHeadless = on;
         m_player.setHideHead(on);
     }
 
@@ -308,6 +309,7 @@ class GLScene {
     void drawWindows(const Mat4& vp, const std::vector<WindowRender>& windows);
     void drawFullscreen(float alpha, bool perPixel);
     void drawCrosshair(int width, int height);
+    void drawWristHud(int width, int height);
     void drawPointer(const Mat4& vp, int width, int height);
 
     // Fullscreen NDC quad in the SCENE program's layout (pos3+uv2): the
@@ -416,6 +418,7 @@ class GLScene {
     std::filesystem::file_time_type m_playerMtime{};
     bool                            m_playerMtimeValid = false;
     bool                            m_playerVisible    = false;
+    bool                            m_playerHeadless   = false; // first person (wrist HUD)
     Vec3                            m_playerFeet{};
     float                           m_playerYaw        = 0.f;
     float                           m_debugFps     = 0.f;

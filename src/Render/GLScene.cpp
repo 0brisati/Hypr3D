@@ -1992,6 +1992,55 @@ void GLScene::drawCrosshair(int width, int height) {
     drawLayer(OUTER_PX, INNER_PX, THICK_PX, 0.0f, 0.0f, 0.0f, 1.0f);
 }
 
+// First person only: while the knight's wrist is raised ("Wrist" held), show
+// the worn Pip-Boy's main screen (player.screen_image) as a readable panel at
+// the lower right, since the real screen is rarely in view.
+void GLScene::drawWristHud(int width, int height) {
+    if (!m_playerHeadless || !m_player.loaded() || !m_pointerVAO || !m_pointerVBO ||
+        width <= 0 || height <= 0)
+        return;
+    const unsigned int TEX = m_player.screenImageTexture();
+    const float HW = m_player.holdWeight("Wrist");
+    if (!TEX || HW <= 0.f)
+        return;
+    const float ALPHA = HW * HW * (3.f - 2.f * HW);
+
+    // Main panel of the atlas (mirrored left-right on the model): UV x
+    // 0.007..0.715, y 0.009..0.943 -> pixel aspect 362 : 478.
+    constexpr float U0 = 0.715f, U1 = 0.007f, V0 = 0.009f, V1 = 0.943f;
+    const float PH = 0.5f * static_cast<float>(height);
+    const float PW = PH * (362.f / 478.f);
+    const float X0 = 0.97f * static_cast<float>(width) - PW, Y0 = 0.45f * static_cast<float>(height);
+    const float X1 = X0 + PW, Y1 = Y0 + PH;
+    const float CORNERS[6][4] = {
+        {X0, Y0, U0, V0}, {X1, Y0, U1, V0}, {X1, Y1, U1, V1},
+        {X0, Y0, U0, V0}, {X1, Y1, U1, V1}, {X0, Y1, U0, V1},
+    };
+    std::vector<float> verts;
+    verts.reserve(6 * 5);
+    for (const auto& C : CORNERS) {
+        const float NX = C[0] * 2.f / static_cast<float>(width) - 1.f;
+        const float NY = 1.f - C[1] * 2.f / static_cast<float>(height);
+        verts.insert(verts.end(), {NX, -NY, 0.f, C[2], C[3]}); // flipped framebuffer, as drawPointer
+    }
+
+    glUseProgram(m_sceneProgram);
+    const Mat4 IDENTITY = Mat4::identity();
+    glUniformMatrix4fv(m_sceneMVP, 1, GL_FALSE, IDENTITY.m.data());
+    glUniform1i(m_sceneTextured, 1);
+    glUniform1i(m_sceneTexture, 0);
+    glUniform4f(m_sceneColorUniform, 1.f, 1.f, 1.f, 0.95f * ALPHA);
+    glUniform4f(m_sceneUVRect, 0.f, 0.f, 1.f, 1.f);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, TEX);
+    glBindBuffer(GL_ARRAY_BUFFER, m_pointerVBO);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, static_cast<GLsizeiptr>(verts.size() * sizeof(float)), verts.data());
+    glBindVertexArray(m_pointerVAO);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    glBindVertexArray(0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
 void GLScene::drawPointer(const Mat4& vp, int width, int height) {
     if (m_pointer.mode == SPointer::EMode::Hidden || !m_pointerVAO ||
         !m_pointerVBO || width <= 0 || height <= 0)
@@ -2630,6 +2679,7 @@ bool GLScene::render(
 
     drawFullscreen(std::clamp(alpha, 0.0f, 1.0f), MORPH);
     drawCrosshair(width, height);
+    drawWristHud(width, height);
     drawPointer(vp, width, height);
 
     // --- restore compositor state ---
