@@ -2467,6 +2467,33 @@ static void startTo3D() {
         g_fsPhaseStart = std::chrono::steady_clock::now();
         g_input.reset();
         damageCurrentMonitor();
+    } else if (g_fsPhase == EFullscreenPhase::In2D) {
+        // The fullscreen window CLOSED during the 2D passthrough (a game
+        // quitting): there is no quad to fly back, so land straight in the
+        // room. Without this the phase stayed In2D forever -- the desktop
+        // showing, input released, the room never coming back.
+        if (!pointerFree() && Compat::setCursorHidden(true))
+            Pointer::mgr()->resetCursorImage();
+
+        Compat::setPointerCapture(g_hookInstalled);
+
+        g_fsPhase  = EFullscreenPhase::None;
+        g_fsWindow = {};
+        g_fsWasOn  = false;
+        g_input.reset();
+
+        // Hyprland's FS fade dimmed the other workspace windows; put them back
+        // (same reset as the To3D landing).
+        const auto MON = targetMonitor();
+        if (MON && MON->m_activeWorkspace) {
+            for (auto const& W3 : Desktop::windowState()->windows()) {
+                if (W3 && W3->m_workspace == MON->m_activeWorkspace &&
+                    !bool(W3->m_state & Desktop::View::WINDOW_STATE_PINNED))
+                    *W3->presentation().alpha(Desktop::View::WINDOW_ALPHA_FULLSCREEN) = 1.F;
+            }
+        }
+
+        damageCurrentMonitor();
     }
 }
 
