@@ -19,7 +19,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstring>
-#include <filesystem>
+#include <sys/stat.h>
 #include <memory>
 
 namespace H3D {
@@ -496,13 +496,12 @@ void CPlayerModel::evaluateNodes() {
 
 void CPlayerModel::update(float dt) {
     // Custom wrist-screen image: (re)upload when the file changes.
+    // stat(), not std::filesystem: libstdc++'s file_clock epoch is 2174, so
+    // its counts are negative and read as "no file".
     long long MT = -1;
-    if (!m_screenImage.empty()) {
-        std::error_code EC;
-        const auto T = std::filesystem::last_write_time(m_screenImage, EC);
-        if (!EC)
-            MT = T.time_since_epoch().count();
-    }
+    struct stat ST{};
+    if (!m_screenImage.empty() && ::stat(m_screenImage.c_str(), &ST) == 0)
+        MT = static_cast<long long>(ST.st_mtim.tv_sec) * 1000000000LL + ST.st_mtim.tv_nsec;
     if (MT != m_screenMtime) {
         m_screenMtime = MT;
         if (m_screenTex) {
