@@ -4954,7 +4954,9 @@ static void dumpStatus() {
             << " seated=" << g_seated << " view=" << g_viewMode
             << " fpbody=" << g_cfgFpBody;
         if (auto* PL = g_scene.player())
-            out << " wristW=" << PL->holdWeight("Wrist") << " screenTex=" << PL->screenImageTexture();
+            out << " wristW=" << PL->holdWeight("Wrist") << " screenTex=" << PL->screenImageTexture()
+                << " hudHeadless=" << g_scene.hudHeadless() << " hudCalls=" << g_scene.hudCalls()
+                << " hudDraws=" << g_scene.hudDraws();
         out << "\n";
     }
 }

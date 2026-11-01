@@ -203,6 +203,12 @@ class GLScene {
     }
 
     // First-person body: draw the character headless under the eye.
+    // Wrist HUD diagnostics (status file): frames reaching drawWristHud /
+    // frames that drew it, and whether first person was flagged.
+    unsigned long hudCalls() const { return m_hudCalls; }
+    unsigned long hudDraws() const { return m_hudDraws; }
+    bool          hudHeadless() const { return m_playerHeadless; }
+
     void setPlayerHeadless(bool on) {
         m_playerHeadless = on;
         m_player.setHideHead(on);
@@ -419,6 +425,7 @@ class GLScene {
     bool                            m_playerMtimeValid = false;
     bool                            m_playerVisible    = false;
     bool                            m_playerHeadless   = false; // first person (wrist HUD)
+    unsigned long                   m_hudCalls = 0, m_hudDraws = 0;
     Vec3                            m_playerFeet{};
     float                           m_playerYaw        = 0.f;
     float                           m_debugFps     = 0.f;

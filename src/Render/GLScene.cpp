@@ -1996,6 +1996,7 @@ void GLScene::drawCrosshair(int width, int height) {
 // the worn Pip-Boy's main screen (player.screen_image) as a readable panel at
 // the lower right, since the real screen is rarely in view.
 void GLScene::drawWristHud(int width, int height) {
+    ++m_hudCalls;
     if (!m_playerHeadless || !m_player.loaded() || !m_pointerVAO || !m_pointerVBO ||
         width <= 0 || height <= 0)
         return;
@@ -2039,6 +2040,7 @@ void GLScene::drawWristHud(int width, int height) {
     glDrawArrays(GL_TRIANGLES, 0, 6);
     glBindVertexArray(0);
     glBindTexture(GL_TEXTURE_2D, 0);
+    ++m_hudDraws;
 }
 
 void GLScene::drawPointer(const Mat4& vp, int width, int height) {
