@@ -19,6 +19,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstring>
+#include <filesystem>
 #include <memory>
 
 namespace H3D {
@@ -494,6 +495,29 @@ void CPlayerModel::evaluateNodes() {
 }
 
 void CPlayerModel::update(float dt) {
+    // Custom wrist-screen image: (re)upload when the file changes.
+    long long MT = -1;
+    if (!m_screenImage.empty()) {
+        std::error_code EC;
+        const auto T = std::filesystem::last_write_time(m_screenImage, EC);
+        if (!EC)
+            MT = T.time_since_epoch().count();
+    }
+    if (MT != m_screenMtime) {
+        m_screenMtime = MT;
+        if (m_screenTex) {
+            glDeleteTextures(1, &m_screenTex);
+            m_screenTex = 0;
+        }
+        if (MT >= 0) {
+            int W = 0, H = 0, COMP = 0;
+            unsigned char* PIX = stbi_load(m_screenImage.c_str(), &W, &H, &COMP, 4);
+            if (PIX) {
+                m_screenTex = uploadGLTex(std::vector<unsigned char>(PIX, PIX + static_cast<size_t>(W) * H * 4), W, H);
+                stbi_image_free(PIX);
+            }
+        }
+    }
     if (!m_loaded)
         return;
 
@@ -1166,6 +1190,11 @@ void CPlayerModel::destroy() {
         if (P.texture)
             glDeleteTextures(1, &P.texture);
     }
+    if (m_screenTex) {
+        glDeleteTextures(1, &m_screenTex);
+        m_screenTex = 0;
+        m_screenMtime = -1;
+    }
     m_prims.clear();
 
     if (m_program) {
@@ -1242,7 +1271,9 @@ void CPlayerModel::draw(const Mat4& vp, const Vec3& cameraPos) const {
                     std::find(m_screenMaterials.begin(), m_screenMaterials.end(),
                               P.material) != m_screenMaterials.end()
                         ? 1.0f : CMapModel::s_lightLevel);
-        glBindTexture(GL_TEXTURE_2D, P.texture);
+        const bool SCREEN_IMG = m_screenTex && P.material == "Pipboy_Screens";
+        glUniform1i(m_uHasTex, SCREEN_IMG || P.texture != 0);
+        glBindTexture(GL_TEXTURE_2D, SCREEN_IMG ? m_screenTex : P.texture);
         glBindVertexArray(P.vao);
         if (P.indexed)
             glDrawElements(GL_TRIANGLES, P.count, GL_UNSIGNED_INT, nullptr);

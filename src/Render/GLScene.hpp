@@ -177,6 +177,7 @@ class GLScene {
         float       emissiveScale = 1.0f;
         bool        flat = false;  // true: raw texture, no headlight shading
         std::vector<std::string> screenMaterials; // ignore the room light
+        std::string screenImage;  // PNG swapped onto the "Pipboy_Screens" material, re-read when its mtime changes
         std::string center;       // parsed for format parity; the player
         Vec3        centerOffset{}; // rotates around its anchor, so only
                                   // center_offset (the anchor shift) applies

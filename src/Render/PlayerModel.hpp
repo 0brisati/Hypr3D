@@ -134,6 +134,13 @@ class CPlayerModel {
         m_screenMaterials = m;
     }
 
+    // PNG drawn on the wrist Pip-Boy's "Pipboy_Screens" material instead of
+    // its authored texture (laid out in the same atlas). Re-read in update()
+    // whenever the file's mtime changes; empty path restores the original.
+    void setScreenImage(const std::string& path) {
+        m_screenImage = path;
+    }
+
     void setHideHead(bool hide) {
         m_hideHead = hide;
     }
@@ -298,6 +305,9 @@ class CPlayerModel {
     Vec3   m_scale{1.f, 1.f, 1.f};
     Vec3   m_rotDeg{}; // authored-facing correction, XYZ degrees
     bool   m_flat = false;
+    std::string m_screenImage;
+    long long   m_screenMtime = -1;
+    unsigned int m_screenTex = 0;
     float  m_emissiveScale = 1.0f;
 
     bool   m_loaded = false;

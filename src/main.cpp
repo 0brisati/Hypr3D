@@ -6265,6 +6265,21 @@ static int luaGesture(lua_State* L) {
     return 1;
 }
 
+// hypr3d.hold(name): hold the player's clip `name` (e.g. "Wrist", a raised
+// Pip-Boy arm) until hold("") releases it. Returns false when the character
+// has no such clip.
+static int luaHold(lua_State* L) {
+    const char* NAME = luaL_checkstring(L, 1);
+    bool ok = true;
+    if (g_scene.player())
+        g_scene.player()->setHold(NAME);
+    else
+        ok = false;
+    damageCurrentMonitor();
+    lua_pushboolean(L, ok);
+    return 1;
+}
+
 // hypr3d.sit([on]): sit in player.seat (no argument: sit down); false
 // stands up. Returns whether the player is seated.
 static int luaSit(lua_State* L) {
@@ -6817,6 +6832,8 @@ static int luaConfig(lua_State* L) {
 
         if (!SET_STRINGS(idx, "screen_materials", g_playerCfg.screenMaterials))
             return luaL_error(L, "hypr3d.config: player.screen_materials must be a list of strings");
+        if (!SET_STRING(idx, "screen_image", g_playerCfg.screenImage, "player.screen_image"))
+            return luaL_error(L, "hypr3d.config: player.screen_image must be a string");
 
         // player.mesh: the character's visual, described exactly like a
         // scene object's mesh. The transform.position anchors the model
@@ -7299,6 +7316,8 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     if (!HyprlandAPI::addLuaFunction(PHANDLE, "hypr3d", "gesture", luaGesture))
         throw std::runtime_error("[hypr3d] failed to register Lua gesture");
 
+    if (!HyprlandAPI::addLuaFunction(PHANDLE, "hypr3d", "hold", luaHold))
+        throw std::runtime_error("[hypr3d] failed to register Lua hold");
     if (!HyprlandAPI::addLuaFunction(PHANDLE, "hypr3d", "sit", luaSit))
         throw std::runtime_error("[hypr3d] failed to register Lua sit");
 

@@ -2529,6 +2529,7 @@ bool GLScene::render(
                          m_playerCfg.rotDeg);
         m_player.setFlat(m_playerCfg.flat);
         m_player.setScreenMaterials(m_playerCfg.screenMaterials);
+        m_player.setScreenImage(m_playerCfg.screenImage);
         m_player.setEmissiveScale(m_playerCfg.emissiveScale);
         m_player.update(dt);
         m_player.draw(vp, m_camera.position);
