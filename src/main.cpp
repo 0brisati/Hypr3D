@@ -4951,7 +4951,11 @@ static void dumpStatus() {
             << "," << PV.GetZ() << ") moveVel=(" << s_moveVel.x << ","
             << s_moveVel.y << "," << s_moveVel.z << ") grounded="
             << g_grounded << " flying=" << g_playerFlying
-            << " seated=" << g_seated << "\n";
+            << " seated=" << g_seated << " view=" << g_viewMode
+            << " fpbody=" << g_cfgFpBody;
+        if (auto* PL = g_scene.player())
+            out << " wristW=" << PL->holdWeight("Wrist") << " screenTex=" << PL->screenImageTexture();
+        out << "\n";
     }
 }
 
